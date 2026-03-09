@@ -112,6 +112,42 @@ secrets:
       provider: langfuse_host
       key: azure-resource-group
       vaultUrl: https://wdf-secret-manager.vault.azure.net/
+infrastructure:
+  backingServices:
+  - type: cognitive-account
+    name: financial-analysis-openai
+    config:
+      kind: OpenAI
+      sku: S0
+  - type: openai-deployment
+    name: gpt-5-mini
+    dependsOn: cognitive-account
+    config:
+      modelName: gpt-5-mini
+      modelFormat: OpenAI
+      skuCapacity: 10
+  - type: storage-account
+    name: financialanalysissynapse
+    config:
+      accountKind: StorageV2
+      isHnsEnabled: true
+      containers:
+      - name: data
+  - type: synapse-workspace
+    name: financial-analysis-synapse
+    dependsOn: storage-account
+    config:
+      fileSystem: data
+      sqlAdminLogin: sqladmin
+  - type: synapse-spark-pool
+    name: sparkpool
+    dependsOn: synapse-workspace
+    config:
+      nodeSize: Small
+      sparkVersion: "3.3"
+      autoScale:
+        minNodes: 3
+        maxNodes: 10
 dataSources:
   inputs:
   - name: llm-endpoint
