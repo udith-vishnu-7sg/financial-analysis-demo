@@ -68,6 +68,24 @@ secrets:
     externalRef:
       provider: vault
       key: secret/financial-analysis/storage/container
+  - name: langfuse-host
+    injectAs: env
+    envVar: LANGFUSE_HOST
+    externalRef:
+      provider: vault
+      key: secret/financial-analysis/langfuse/host
+  - name: langfuse-public-key
+    injectAs: env
+    envVar: LANGFUSE_PUBLIC_KEY
+    externalRef:
+      provider: vault
+      key: secret/financial-analysis/langfuse/public-key
+  - name: langfuse-secret-key
+    injectAs: env
+    envVar: LANGFUSE_SECRET_KEY
+    externalRef:
+      provider: vault
+      key: secret/financial-analysis/langfuse/secret-key
   - name: crusoe-openai-endpoint
     injectAs: env
     envVar: AZURE_OPENAI_ENDPOINT

@@ -25,6 +25,8 @@ EXPOSE 8000
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
+# Langfuse tracing (override at runtime via docker run -e or k8s env)
+ENV LANGFUSE_ENABLED=true
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

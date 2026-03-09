@@ -21,6 +21,31 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Langfuse singleton — initialised once at module level so the OpenAI
+# drop-in replacement and @observe decorator can pick up the config.
+_langfuse_client = None
+
+def _init_langfuse():
+    """Initialise the Langfuse client and set env vars for the SDK."""
+    global _langfuse_client
+    settings = get_settings()
+    if not (settings.langfuse_enabled and settings.langfuse_host
+            and settings.langfuse_public_key and settings.langfuse_secret_key):
+        logger.info("Langfuse tracing disabled (missing config or LANGFUSE_ENABLED=false)")
+        return
+    import os
+    os.environ.setdefault("LANGFUSE_HOST", settings.langfuse_host)
+    os.environ.setdefault("LANGFUSE_PUBLIC_KEY", settings.langfuse_public_key)
+    os.environ.setdefault("LANGFUSE_SECRET_KEY", settings.langfuse_secret_key)
+    try:
+        from langfuse import Langfuse
+        _langfuse_client = Langfuse()
+        logger.info(f"Langfuse tracing enabled — host: {settings.langfuse_host}")
+    except Exception as e:
+        logger.warning(f"Failed to initialise Langfuse: {e}")
+
+_init_langfuse()
+
 # Global engine instance
 engine: Optional[FinancialAnalysisEngine] = None
 
@@ -74,6 +99,12 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down Financial Analysis API...")
+    if _langfuse_client:
+        try:
+            _langfuse_client.flush()
+            logger.info("Langfuse traces flushed")
+        except Exception as e:
+            logger.warning(f"Error flushing Langfuse: {e}")
     if engine:
         engine.shutdown()
 

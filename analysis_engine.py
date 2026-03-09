@@ -5,6 +5,7 @@ Uses Azure Synapse Spark exclusively (no local PySpark).
 """
 from typing import Dict, Any, Optional, List
 import logging
+import os
 
 from synapse_client import create_synapse_session, SynapseConnectionError
 from data_loader import DataLoader
@@ -14,6 +15,30 @@ from response_formatter import AnalysisResponse, ResponseFormatter
 from config import Settings
 
 logger = logging.getLogger(__name__)
+
+def _langfuse_observe():
+    """Return the @observe decorator if Langfuse is available, otherwise a no-op."""
+    try:
+        langfuse_enabled = os.getenv("LANGFUSE_ENABLED", "true").lower() in ("true", "1", "yes")
+        langfuse_configured = all([
+            os.getenv("LANGFUSE_HOST"),
+            os.getenv("LANGFUSE_PUBLIC_KEY"),
+            os.getenv("LANGFUSE_SECRET_KEY"),
+        ])
+        if langfuse_enabled and langfuse_configured:
+            from langfuse.decorators import observe
+            return observe
+    except ImportError:
+        pass
+    def _noop_decorator(*args, **kwargs):
+        def wrapper(fn):
+            return fn
+        if args and callable(args[0]):
+            return args[0]
+        return wrapper
+    return _noop_decorator
+
+observe = _langfuse_observe()
 
 
 class FinancialAnalysisEngine:
@@ -85,6 +110,7 @@ class FinancialAnalysisEngine:
             logger.info("Data views refreshed")
         return success
     
+    @observe(name="financial_analysis")
     def analyze(
         self,
         question: str,
@@ -237,6 +263,7 @@ class FinancialAnalysisEngine:
                 metadata={'error': str(e)}
             )
     
+    @observe(name="custom_query_execution")
     def execute_custom_query(
         self,
         query: str,
@@ -320,6 +347,7 @@ class FinancialAnalysisEngine:
                 metadata={'error': str(e)}
             )
     
+    @observe(name="get_suggestions")
     def get_suggestions(self, question: str) -> List[str]:
         """
         Get related question suggestions

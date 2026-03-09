@@ -3,14 +3,32 @@ LLM-powered query generation module using Azure OpenAI
 Converts natural language questions into Spark SQL queries
 """
 from typing import Optional, Dict, List, Any, Literal
-from openai import AzureOpenAI
 import json
 import logging
+import os
 import re
 from tenacity import retry, stop_after_attempt, wait_exponential
 from schemas import get_schema_context
 
 logger = logging.getLogger(__name__)
+
+def _get_openai_client_class():
+    """Return AzureOpenAI class — Langfuse-wrapped if configured, plain otherwise."""
+    langfuse_enabled = os.getenv("LANGFUSE_ENABLED", "true").lower() in ("true", "1", "yes")
+    langfuse_configured = all([
+        os.getenv("LANGFUSE_HOST"),
+        os.getenv("LANGFUSE_PUBLIC_KEY"),
+        os.getenv("LANGFUSE_SECRET_KEY"),
+    ])
+    if langfuse_enabled and langfuse_configured:
+        try:
+            from langfuse.openai import AzureOpenAI as LangfuseAzureOpenAI
+            logger.info("Using Langfuse-instrumented AzureOpenAI client")
+            return LangfuseAzureOpenAI
+        except ImportError:
+            logger.warning("langfuse package not installed, falling back to plain AzureOpenAI")
+    from openai import AzureOpenAI
+    return AzureOpenAI
 
 
 class QueryGenerator:
@@ -52,7 +70,8 @@ class QueryGenerator:
         logger.info(f"Using Azure OpenAI endpoint: {normalized_endpoint}")
         logger.info(f"Deployment name: {deployment_name}")
         
-        self.client = AzureOpenAI(
+        ClientClass = _get_openai_client_class()
+        self.client = ClientClass(
             azure_endpoint=normalized_endpoint,
             api_key=api_key,
             api_version=api_version
@@ -104,7 +123,9 @@ class QueryGenerator:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                max_completion_tokens=2000  # Limit response length for SQL queries
+                max_completion_tokens=2000,
+                name="generate_sql_query",
+                metadata={"operation": "query_generation", "question": user_question[:200]},
             )
             
             result_text = response.choices[0].message.content
@@ -223,15 +244,15 @@ Return your response as JSON with the following structure:
 """
         
         try:
-            # Note: Not using response_format due to pydantic serialization bug in OpenAI SDK
-            # The system prompt already instructs the model to return JSON
             response = self.client.chat.completions.create(
                 model=self.deployment_name,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                max_completion_tokens=2000  # Limit response length for refined queries
+                max_completion_tokens=2000,
+                name="refine_sql_query",
+                metadata={"operation": "query_refinement", "feedback": user_feedback[:200]},
             )
             
             result_text = response.choices[0].message.content
@@ -286,15 +307,15 @@ Return your response as JSON:
 """
         
         try:
-            # Note: Not using response_format due to pydantic serialization bug in OpenAI SDK
-            # The prompt already instructs the model to return JSON
             response = self.client.chat.completions.create(
                 model=self.deployment_name,
                 messages=[
                     {"role": "system", "content": "You are a data analysis assistant specializing in NYC taxi and ride-share data."},
                     {"role": "user", "content": prompt}
                 ],
-                max_completion_tokens=500  # Short explanations
+                max_completion_tokens=500,
+                name="suggest_related_queries",
+                metadata={"operation": "suggestions", "question": user_question[:200]},
             )
             
             result_text = response.choices[0].message.content
@@ -402,7 +423,8 @@ class NarrativeGenerator:
         logger.info(f"Using Azure OpenAI endpoint: {normalized_endpoint}")
         logger.info(f"Deployment name: {deployment_name}")
         
-        self.client = AzureOpenAI(
+        ClientClass = _get_openai_client_class()
+        self.client = ClientClass(
             azure_endpoint=normalized_endpoint,
             api_key=api_key,
             api_version=api_version
@@ -474,7 +496,9 @@ Write in a professional but accessible tone. Use specific numbers from the resul
                     {"role": "system", "content": "You are a data analyst specializing in transportation and financial analysis."},
                     {"role": "user", "content": prompt}
                 ],
-                max_completion_tokens=1000  # Limit narrative length
+                max_completion_tokens=1000,
+                name="generate_narrative",
+                metadata={"operation": "narrative_generation", "question": user_question[:200]},
             )
             
             narrative = response.choices[0].message.content

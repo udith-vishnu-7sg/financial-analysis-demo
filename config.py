@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     api_title: str = Field(default="Financial Analysis API", env="API_TITLE")
     api_version: str = Field(default="1.0.0", env="API_VERSION")
     
+    # Langfuse Observability Configuration
+    langfuse_host: Optional[str] = Field(default=None, env="LANGFUSE_HOST")
+    langfuse_public_key: Optional[str] = Field(default=None, env="LANGFUSE_PUBLIC_KEY")
+    langfuse_secret_key: Optional[str] = Field(default=None, env="LANGFUSE_SECRET_KEY")
+    langfuse_enabled: bool = Field(default=True, env="LANGFUSE_ENABLED")
+    
     # Streamlit Configuration
     streamlit_port: int = Field(default=8501, env="STREAMLIT_PORT")
     streamlit_host: str = Field(default="0.0.0.0", env="STREAMLIT_HOST")
